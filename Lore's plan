@@ -1,0 +1,138 @@
+## ✅ 📦 Project: Hacker News Upvote Prediction
+
+### 🖖 Project Goal
+Predict the Hacker News upvote score from post titles using a trained word embedding model (Word2Vec Skip-gram) and an MLP regressor.
+
+---
+
+## 🔁 Pipeline Overview
+
+### 1. Data Preparation
+**Goal:** Obtain and clean titles and scores from the Hacker News PostgreSQL database.
+
+| Task         | Description                                                                 |
+|--------------|-----------------------------------------------------------------------------|
+| Connect to DB| Use connection string: `xxxxxxx` |
+| Extract      | Extract fields: `title`, `score`                                            |
+| Clean        | Filter null titles, lowercase, tokenize                                     |
+| Save         | `titles.csv` or `data.json` (store `title` and `score`)                    |
+
+> 📂 Save file: `hn_titles_scores.csv`
+
+---
+
+### 2. Preprocessing + Tokenization
+**Goal:** Tokenize all titles, create a vocabulary, map words to integer IDs.
+
+| Task          | Description                                           |
+|---------------|-------------------------------------------------------|
+| Tokenize      | Use regex to split words: `\b\w+\b`                     |
+| Build vocab   | Count frequencies, keep top-N (e.g., 50k), assign IDs |
+| Special tokens| Use `0` for unknown `<UNK>` words                     |
+| Save          | Save vocab mappings for reuse                         |
+
+> 📂 Save files:
+> - `vocab.pkl` → `word2id` mapping
+> - `id2word.pkl` → reverse mapping (optional)
+> - `tokenized_titles.npy` (optional cache of tokenized ID sequences)
+
+---
+
+### 3. Train Skip-gram Word2Vec
+**Goal:** Train a Word2Vec Skip-gram model using the text8 corpus.
+
+| Task       | Description                                                      |
+|------------|------------------------------------------------------------------|
+| Use corpus | Download `text8`: https://huggingface.co/datasets/ardMLX/text8  |
+| Tokenize   | Reuse tokenizer and vocabulary                                   |
+| Generate training samples | `target`, `context`, `negatives`                 |
+| Model      | Define `SkipGramModel(vocab_size, embedding_dim)`               |
+| Train      | With negative sampling                                          |
+| Save       | Best performing model and vocab for reuse                       |
+
+> 📂 Save files:
+> - `best_skipgram_model.pth` → trained embeddings (`state_dict`)
+> - `vocab.pkl` → same vocab used in training
+> - `skipgram_config.json` → stores `vocab_size`, `embedding_dim` metadata
+
+---
+
+### 4. Pooling Word Embeddings per Title
+**Goal:** Convert each tokenized title into a single vector via average pooling of word embeddings.
+
+| Task        | Description                                                |
+|-------------|------------------------------------------------------------|
+| Load vocab and model | Ensure token IDs match skip-gram vocab           |
+| Pool         | Get embeddings for each word ID, then `mean(dim=0)`      |
+| Output       | 1 vector (e.g., 128-d) per title                          |
+
+---
+
+### 5. Train MLP Regressor
+**Goal:** Predict upvote score from the pooled embedding.
+
+| Task     | Description                                        |
+|----------|----------------------------------------------------|
+| Dataset  | Title vectors (X) → Score (y)                   |
+| Model    | 3 hidden layers MLP: `[128 → 64 → 32 → 1]`          |
+| Loss     | MSE or L1 Loss                                     |
+| Train loop | Standard PyTorch training                        |
+| Save     | Save trained MLP for testing/prediction            |
+
+> 📂 Save file: `regressor_mlp.pth`
+
+---
+
+### 6. Evaluation + Inference
+**Goal:** Evaluate model performance, predict new titles.
+
+| Task      | Description                                                           |
+|-----------|-----------------------------------------------------------------------|
+| Metrics   | MSE, MAE                                                              |
+| Inference | Convert a new title → token IDs → pooled embedding → predicted score |
+| Optional  | Visualize prediction vs true (scatter plot)                          |
+
+---
+
+## 📅 📁 Suggested Project Structure
+```
+hn-upvotes/
+├── data/
+│   ├── hn_titles_scores.csv
+│   ├── vocab.pkl
+│   └── id2word.pkl
+│
+├── embeddings/
+│   ├── best_skipgram_model.pth
+│   ├── skipgram_config.json
+│   └── text8.txt
+│
+├── models/
+│   ├── regressor_mlp.pth
+│   └── mlp_config.json
+│
+├── notebooks/
+│   └── analysis.ipynb
+│
+├── scripts/
+│   ├── 1_extract_data.py
+│   ├── 2_tokenize_and_vocab.py
+│   ├── 3_train_skipgram.py
+│   ├── 4_pool_embeddings.py
+│   ├── 5_train_regressor.py
+│   └── 6_inference.py
+```
+
+---
+
+## ✅ What to Save (Final Checklist)
+
+| Artifact               | Purpose                             | File                    |
+|------------------------|-------------------------------------|-------------------------|
+| Cleaned data           | Titles + scores                     | `hn_titles_scores.csv`  |
+| Vocab mapping          | Tokenization consistency            | `vocab.pkl`             |
+| Trained embedding model| Reusable word vectors               | `best_skipgram_model.pth`|
+| Model config           | To reconstruct skipgram architecture| `skipgram_config.json`  |
+| MLP regressor          | Predict upvotes                     | `regressor_mlp.pth`     |
+| MLP config             | Define architecture/hyperparams     | `mlp_config.json`       |
+
