@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
-from utils.tokenizer import word_tokenize
+from utils.tokenizer import build_tokenizer
 import json
 import os
+import pickle
+import time
 
 
 class SkipGramDataset(torch.utils.data.Dataset):
@@ -34,47 +36,51 @@ class SkipGramModel(nn.Module):
         return self.out(emb)
 
 
-def build_vocab(text):
-    tokens = set(w for line in text for w in line)
-    word2idx = {w: idx for idx, w in enumerate(sorted(tokens))}
-    return word2idx
-
-
 def train_word2vec(path=None, vector_size=100, window=2, epochs=5, vocab_out="hn_vocab.json"):
-    # Load text from file OR HuggingFace dataset fallback
     if path and os.path.exists(path):
         with open(path, 'r') as f:
             raw = f.read()
     else:
         from datasets import load_dataset
-        print("Downloading 'text8' from Hugging Face...")
+        print(f"[{time.ctime()}] 📥 Downloading 'text8' from Hugging Face...")
         ds = load_dataset("afmck/text8-chunked1024", split='train')
         raw = "\n".join(ds["text"])
 
-    # Tokenize and build vocab
-    sentences = [word_tokenize(sent) for sent in raw.split('.') if sent]
-    word2idx = build_vocab(sentences)
-    indexed = [[word2idx[w] for w in sent if w in word2idx]
-               for sent in sentences]
-    dataset = SkipGramDataset(indexed, window_size=window)
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=128, shuffle=True)
+    print(f"[{time.ctime()}] 🧠 Building tokenizer from corpus...")
+    word2idx, id2word = build_tokenizer()
 
-    model = SkipGramModel(len(word2idx), vector_size)
+    with open("data/corpus.pkl", "rb") as f:
+        indexed = pickle.load(f)
+
+    tokens = [word2idx.get(w, 0) for w in indexed]
+    windowed = [tokens[i:i + 20] for i in range(0, len(tokens) - 20, 20)]
+
+    dataset = SkipGramDataset(windowed, window_size=window)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[{time.ctime()}] ✅ Using device: {device}")
+
+    model = SkipGramModel(len(word2idx), vector_size).to(device)
     model.vocab = word2idx
+
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(epochs):
+        start_time = time.time()
         total_loss = 0
         for center, context in dataloader:
+            center = center.to(device)
+            context = context.to(device
             pred = model(center)
             loss = criterion(pred, context)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()
-        print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}")
+            print(loss.item())
+     
+       
 
     save_vocab(word2idx, vocab_out)
     return model
