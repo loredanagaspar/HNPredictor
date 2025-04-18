@@ -1,27 +1,37 @@
-import pandas as pd
-from pipeline.tokenizer import clean_and_tokenize
-from embedding.word2vec_trainer import build_vocab, generate_skipgram_data, train_skipgram_model
+# hn_upvote_predictor/main.py
 
-if __name__ == "__main__":
-    print("📄 Loading data from CSV...")
-    df = pd.read_csv("hn_title_modeling_dataset.csv")
+from utils.db import fetch_data
+from utils.data import HackerNewsDataset, train_test_split_data
+from models.word2vec import train_word2vec, save_vocab
+from models.regressor import train_model
+import torch
+from torch.utils.data import DataLoader
 
-    print("✅ Data loaded:", df.shape)
-    print("🧾 Columns:", df.columns.tolist())
-    print(df.head(3))
 
-# Tokenize titles
-df["tokens"] = df["title"].astype(str).apply(clean_and_tokenize)
-print("🗣️ Tokenized titles:", df["tokens"].head(3))
+def main():
+    print("Fetching data...")
+    df = fetch_data()
 
-# Save the DataFrame with tokens to a new CSV file
-df.to_csv("hn_title_modeling_dataset_with_tokens.csv", index=False)
-print("✅ Tokens saved to 'hn_title_modeling_dataset_with_tokens.csv'")
+    print("Training Word2Vec (Skip-gram)...")
+    w2v_model = train_word2vec("data/text8", vocab_out="hn_vocab.json")
 
-token_lists = df["tokens"].tolist()
-vocab, index2word = build_vocab(token_lists, min_count=5)
-pairs = generate_skipgram_data(token_lists, vocab, window_size=2)
+    print("Creating datasets...")
+    train_df, test_df = train_test_split_data(df)
+    train_set = HackerNewsDataset(train_df, w2v_model)
+    test_set = HackerNewsDataset(test_df, w2v_model)
 
-print("🧠 Training Skip-gram model...")
-model = train_skipgram_model(pairs, vocab_size=len(vocab), embedding_dim=100)
-torch.save(model.state_dict(), "skipgram_hn.pt")
+    train_loader = DataLoader(train_set, batch_size=32, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=32)
+
+    print("Training regression model...")
+    model = train_model(train_loader, w2v_model.embedding_dim, val_loader=test_loader)
+
+    torch.save(model.state_dict(), "upvote_regressor.pt")
+    torch.save(w2v_model.state_dict(), "hn_word2vec.pt")
+    save_vocab(w2v_model.vocab, "hn_vocab.json")
+
+    print("✅ Training complete.")
+
+
+if __name__ == '__main__':
+    main()
