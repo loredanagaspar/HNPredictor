@@ -12,7 +12,11 @@ Predict the Hacker News upvote score from post titles using a trained word embed
 
 | Task         | Description                                                                 |
 |--------------|-----------------------------------------------------------------------------|
+<<<<<<< HEAD
 | Connect to DB| Use connection string: `xxxxxxx` |
+=======
+| Connect to DB| Use connection string: `postgres://sy91dhb:g5t49ao@178.156.142.230:5432/hd64m1ki` |
+>>>>>>> e8f7b9969b829f1ad82d80e8fc3d55224ccb213a
 | Extract      | Extract fields: `title`, `score`                                            |
 | Clean        | Filter null titles, lowercase, tokenize                                     |
 | Save         | `titles.csv` or `data.json` (store `title` and `score`)                    |
