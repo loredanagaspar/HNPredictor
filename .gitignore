@@ -29,3 +29,8 @@ Thumbs.db
 
 # CSV files
 *.csv
+# Large or temporary data files
+data/text8
+data/corpus.pkl
+*.pth
+*.npy
